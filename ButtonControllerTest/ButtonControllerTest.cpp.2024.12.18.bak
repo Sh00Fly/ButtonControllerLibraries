@@ -1,0 +1,82 @@
+#include <iostream>
+#include <windows.h>
+#include "ButtonController.h"
+
+#pragma comment(lib, "ButtonController.lib")  // Link to your DLL
+
+void printButtonStates(unsigned int buttonStates) {
+	for (int i = 0; i < 32; i++) {  // Assuming up to 32 buttons, adjust if needed
+		std::cout << ((buttonStates & (1 << i)) ? "1" : "0");
+	}
+	std::cout << std::endl;
+}
+
+int main()
+{
+	std::cout << "Button Controller Test\n";
+
+	// List HID devices
+	const int BUFFER_SIZE = 10000;
+	char buffer[BUFFER_SIZE] = { 0 };
+	if (GetHIDDeviceList(buffer, BUFFER_SIZE) == 0) {
+		std::cout << "HID Devices:\n" << buffer << std::endl;
+	}
+	else {
+		std::cout << "Failed to list HID devices." << std::endl;
+	}
+
+	// Find joystick by product string
+	//const char* deviceName = "Three Button Controller";
+	const char* deviceName = "Kinesis JoyStick Controller";
+	int joystickId = FindJoystickByProductString(deviceName);
+
+	if (joystickId >= 0) {
+		std::cout << "Found joystick with ID: " << joystickId << std::endl;
+	}
+	else {
+		std::cout << "Joystick not found by product string." << std::endl;
+	}
+
+	// Find joystick by vendor and product ID
+	unsigned short vendorID = 0x04d8;  // Replace with your joystick's VendorID
+	unsigned short productID = 0x005e; // Replace with your joystick's ProductID
+
+	joystickId = FindJoystickByVendorAndProductID(vendorID, productID);
+
+	if (joystickId >= 0) {
+		std::cout << "Found joystick with ID: " << joystickId << std::endl;
+	}
+	else {
+		std::cout << "Joystick not found by vendor and product ID." << std::endl;
+	}
+
+	// Open and read from joystick
+	void* joystickHandle = OpenJoystick(joystickId);
+	if (joystickHandle) {
+		std::cout << "Successfully opened joystick." << std::endl;
+
+		for (int i = 0; i < 50; i++) {
+			unsigned int buttonStates = ReadButtons(joystickHandle);
+			if (buttonStates != static_cast<unsigned int>(-1) &&
+				buttonStates != static_cast<unsigned int>(-2) &&
+				buttonStates != static_cast<unsigned int>(-3)) {
+				std::cout << "Button states: ";
+				printButtonStates(buttonStates);
+			}
+			else {
+				std::cout << "Failed to read button states. Error code: " << buttonStates << std::endl;
+			}
+			Sleep(100);  // Small delay to avoid hammering the device
+		}
+
+		if (CloseJoystick(joystickHandle) == 0) {
+			std::cout << "Successfully closed joystick." << std::endl;
+		}
+		else {
+			std::cout << "Failed to close joystick." << std::endl;
+		}
+	}
+	else {
+		std::cout << "Failed to open joystick." << std::endl;
+	}    return 0;
+}
