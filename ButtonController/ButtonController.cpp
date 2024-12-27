@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <locale>
 #include <devguid.h>
+#include <stdint.h>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -26,7 +27,8 @@ using json = nlohmann::json;
 //	HANDLE g_deviceHandle = INVALID_HANDLE_VALUE;
 struct JoystickHandle {
 	HANDLE deviceHandle;
-	// any other device-specific fields can be added here
+	DWORD inputReportLength;
+	bool oversizedReport;  // Flag for reports > 8 bytes
 };
 
 // Helper function to convert WCHAR* to std::string
@@ -62,20 +64,20 @@ void CloseLog() {
 
 // C++ implementation
 void WriteToLogCpp(const std::string& message) {
-    if (logFile.is_open()) {
-        auto now = std::chrono::system_clock::now();
-        auto in_time_t = std::chrono::system_clock::to_time_t(now);
-        std::tm bt;
-        localtime_s(&bt, &in_time_t);
-        logFile << std::put_time(&bt, "%Y-%m-%d %X") << ": " << message << std::endl;
-    }
+	if (logFile.is_open()) {
+		auto now = std::chrono::system_clock::now();
+		auto in_time_t = std::chrono::system_clock::to_time_t(now);
+		std::tm bt;
+		localtime_s(&bt, &in_time_t);
+		logFile << std::put_time(&bt, "%Y-%m-%d %X") << ": " << message << std::endl;
+	}
 }
 
 // C interface implementation
 extern "C" void WriteToLog(const char* message) {
-    if (message) {
-        WriteToLogCpp(std::string(message));
-    }
+	if (message) {
+		WriteToLogCpp(std::string(message));
+	}
 }
 
 void LogDeviceCapabilities(HANDLE deviceHandle) {
@@ -403,7 +405,7 @@ extern "C" {
 	//******************** OpenJoystick ********************
 	void* OpenJoystick(int joystickId) {
 		//------------------------------ debug start ------------------------------
-		InitializeLog("c:\\nki\\buttons.log");
+		//InitializeLog("c:\\nki\\buttons.log");
 		//------------------------------- debug end -------------------------------
 		GUID hidGuid;
 		HidD_GetHidGuid(&hidGuid);
@@ -433,16 +435,13 @@ extern "C" {
 			SetupDiDestroyDeviceInfoList(deviceInfoSet);
 			return NULL;  // Error: couldn't get device interface detail
 		}
-
-		HANDLE deviceHandle = CreateFile(
-			detailData->DevicePath,
+		HANDLE deviceHandle = CreateFile(detailData->DevicePath,
 			GENERIC_READ | GENERIC_WRITE,
 			FILE_SHARE_READ | FILE_SHARE_WRITE,
 			NULL,
 			OPEN_EXISTING,
-			FILE_FLAG_OVERLAPPED,
-			NULL
-		);
+			FILE_FLAG_OVERLAPPED,  // Need this for timeout support
+			NULL);
 
 		free(detailData);
 
@@ -450,146 +449,183 @@ extern "C" {
 
 		if (deviceHandle == INVALID_HANDLE_VALUE) {
 			//------------------------------ debug start ------------------------------
-			WriteToLog("Failed to open the device.");
+			//WriteToLog("Failed to open the device.");
 			//------------------------------- debug end -------------------------------
 			return NULL;  // Error: couldn't open the device
+		}
+		// Get and log detailed capabilities
+		PHIDP_PREPARSED_DATA preparsedData = NULL;
+		if (!HidD_GetPreparsedData(deviceHandle, &preparsedData)) {
+			//------------------------------ debug start ------------------------------
+			//WriteToLog("Failed to get preparsed data");
+			//------------------------------- debug end -------------------------------
+			CloseHandle(deviceHandle);
+			return NULL;
+		}
+		HIDP_CAPS caps;
+		if (HidP_GetCaps(preparsedData, &caps) != HIDP_STATUS_SUCCESS) {
+			//------------------------------ debug start ------------------------------
+			//WriteToLog("Failed to get capabilities");
+			//------------------------------- debug end -------------------------------
+			HidD_FreePreparsedData(preparsedData);
+			CloseHandle(deviceHandle);
+			return NULL;
 		}
 
 		JoystickHandle* handle = new (std::nothrow) JoystickHandle();
 		if (!handle) {
+			HidD_FreePreparsedData(preparsedData);
 			CloseHandle(deviceHandle);
 			//------------------------------ debug start ------------------------------
-			WriteToLog("Memory allocation failed for JoystickHandle.");
+			//WriteToLog("Memory allocation failed for JoystickHandle.");
 			//------------------------------- debug end -------------------------------
 			return NULL;  // Error: couldn't allocate memory for JoystickHandle
 		}
 
 		handle->deviceHandle = deviceHandle;
+		handle->inputReportLength = caps.InputReportByteLength;
+		handle->oversizedReport = (caps.InputReportByteLength > MAX_REPORT_SIZE);
+
 		//------------------------------ debug start ------------------------------
 		// Log the handle value
+		/*
 		std::stringstream ss;
 		ss << "Opened joystick with handle: " << handle->deviceHandle;
 		WriteToLog(ss.str().c_str());
 		LogDeviceCapabilities(deviceHandle);
+		if (handle->oversizedReport) {
+			std::stringstream ss;
+			ss << "Warning: Device reports " << caps.InputReportByteLength
+				<< " bytes, but only " << MAX_REPORT_SIZE << " bytes will be processed";
+			WriteToLog(ss.str().c_str());
+		}
+		*/
 		//------------------------------- debug end -------------------------------
 
 		return handle;
 	}
 
 	//******************** ReadButtons ********************
-	unsigned int ReadButtons(void* handle) {
+
+	uint64_t ReadButtons(void* handle) {
+
 		JoystickHandle* joystickHandle = static_cast<JoystickHandle*>(handle);
 		if (!joystickHandle || joystickHandle->deviceHandle == INVALID_HANDLE_VALUE) {
 			//------------------------------ debug start ------------------------------
-			WriteToLog("Invalid handle in ReadButtons");
+			//WriteToLog("Invalid handle in ReadButtons");
 			//------------------------------- debug end -------------------------------
-			return static_cast<unsigned int>(-1);
+			return BUTTONS_ERROR_INVALID_HANDLE;
 		}
 
-		// Get the capabilities first to determine the correct input report length
-		PHIDP_PREPARSED_DATA preparsedData = NULL;
-		if (!HidD_GetPreparsedData(joystickHandle->deviceHandle, &preparsedData)) {
-			//------------------------------ debug start ------------------------------
-			WriteToLog("Failed to get preparsed data");
-			//------------------------------- debug end -------------------------------
-			return static_cast<unsigned int>(-2);
+		// Determine buffer size
+		DWORD bufferSize = joystickHandle->inputReportLength;
+		if (bufferSize > MAX_REPORT_SIZE) {
+			bufferSize = MAX_REPORT_SIZE;  // Truncate to 8 bytes
 		}
 
-		HIDP_CAPS caps;
-		if (HidP_GetCaps(preparsedData, &caps) != HIDP_STATUS_SUCCESS) {
-			HidD_FreePreparsedData(preparsedData);
-			//------------------------------ debug start ------------------------------
-			WriteToLog("Failed to get capabilities");
-			//------------------------------- debug end -------------------------------
-			return static_cast<unsigned int>(-3);
+		// First, flush old events
+		while (true) {
+			OVERLAPPED ol = { 0 };
+			ol.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+			if (!ol.hEvent) {
+				return BUTTONS_ERROR_READ_FAILED;
+			}
+
+			std::vector<BYTE> buffer(bufferSize);
+			DWORD bytesRead = 0;
+
+			if (!ReadFile(joystickHandle->deviceHandle, buffer.data(),
+				joystickHandle->inputReportLength, &bytesRead, &ol)) {
+				if (GetLastError() != ERROR_IO_PENDING) {
+					CloseHandle(ol.hEvent);
+					return BUTTONS_ERROR_READ_FAILED;
+				}
+			}
+
+			// Quick check for data (no real wait)
+			if (WaitForSingleObject(ol.hEvent, 0) != WAIT_OBJECT_0) {
+				CancelIo(joystickHandle->deviceHandle);
+				CloseHandle(ol.hEvent);
+				break;  // No more old events
+			}
+
+			CloseHandle(ol.hEvent);
 		}
 
-		// Use the actual input report length from the device
-		DWORD bufferSize = caps.InputReportByteLength;
-		std::vector<BYTE> buffer(bufferSize);
-
-		//------------------------------ debug start ------------------------------
-		WriteToLog(("Buffer size: " + std::to_string(bufferSize)).c_str());
-		//------------------------------- debug end -------------------------------
-
+		// Now wait for a new event
+		// Set up overlapped structure for timeout support
 		OVERLAPPED ol = { 0 };
 		ol.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-
-		if (ol.hEvent == NULL) {
-			HidD_FreePreparsedData(preparsedData);
+		if (!ol.hEvent) {
 			//------------------------------ debug start ------------------------------
-			WriteToLog("Failed to create event for overlapped I/O");
+			//WriteToLog("Failed to create event for overlapped I/O");
 			//------------------------------- debug end -------------------------------
-			return static_cast<unsigned int>(-4);
+			return BUTTONS_ERROR_READ_FAILED;
 		}
 
+		std::vector<BYTE> buffer(bufferSize);
 		DWORD bytesRead = 0;
-		//------------------------------ debug start ------------------------------
-		WriteToLog("Attempting to read from device...");
-		//------------------------------- debug end -------------------------------
 
+
+		// Start the read operation
 		if (!ReadFile(joystickHandle->deviceHandle, buffer.data(), bufferSize, &bytesRead, &ol)) {
-			DWORD error = GetLastError();
-			if (error != ERROR_IO_PENDING) {
+			if (GetLastError() != ERROR_IO_PENDING) {
 				CloseHandle(ol.hEvent);
-				HidD_FreePreparsedData(preparsedData);
 				//------------------------------ debug start ------------------------------
-				WriteToLog(("ReadFile failed immediately with error: " + std::to_string(error)).c_str());
+				//WriteToLog("ReadFile failed");
 				//------------------------------- debug end -------------------------------
-				return static_cast<unsigned int>(-5);
+				return BUTTONS_ERROR_READ_FAILED;
+			}
+
+			// Wait for new data with timeout
+			if (WaitForSingleObject(ol.hEvent, 100) != WAIT_OBJECT_0) { // 100 ms timeout
+				CancelIo(joystickHandle->deviceHandle);
+				CloseHandle(ol.hEvent);
+				return BUTTONS_NO_NEW_DATA;
+			}
+
+			// Get the results
+			if (!GetOverlappedResult(joystickHandle->deviceHandle, &ol, &bytesRead, FALSE)) {
+				CloseHandle(ol.hEvent);
+				//------------------------------ debug start ------------------------------
+				//WriteToLog("Failed to get overlapped result");
+				//------------------------------- debug end -------------------------------
+				return BUTTONS_ERROR_READ_FAILED;
 			}
 		}
 
-		// Wait for the read operation to complete
-		DWORD waitResult = WaitForSingleObject(ol.hEvent, 1000); // 1 second timeout
-		if (waitResult != WAIT_OBJECT_0) {
-			CloseHandle(ol.hEvent);
-			HidD_FreePreparsedData(preparsedData);
-			//------------------------------ debug start ------------------------------
-			WriteToLog(("Wait failed or timed out. WaitResult: " + std::to_string(waitResult)).c_str());
-			//------------------------------- debug end -------------------------------
-			CancelIo(joystickHandle->deviceHandle);
-			return static_cast<unsigned int>(-6);
-		}
-
-		if (!GetOverlappedResult(joystickHandle->deviceHandle, &ol, &bytesRead, FALSE)) {
-			DWORD error = GetLastError();
-			CloseHandle(ol.hEvent);
-			HidD_FreePreparsedData(preparsedData);
-			//------------------------------ debug start ------------------------------
-			WriteToLog(("GetOverlappedResult failed with error: " + std::to_string(error)).c_str());
-			//------------------------------- debug end -------------------------------
-			return static_cast<unsigned int>(-7);
-		}
-
 		CloseHandle(ol.hEvent);
-		HidD_FreePreparsedData(preparsedData);
 
 		//------------------------------ debug start ------------------------------
-		// Log raw data
+		// Log the raw data
+		/*
 		std::stringstream ss;
-		ss << "Raw data: ";
+		ss << "Raw data (" << bytesRead << " bytes): ";
 		for (DWORD i = 0; i < bytesRead; i++) {
 			ss << std::hex << std::setfill('0') << std::setw(2)
 				<< static_cast<int>(buffer[i]) << " ";
 		}
 		WriteToLog(ss.str().c_str());
+		*/
 		//------------------------------- debug end -------------------------------
 
-		// Process the data
-		unsigned int result = 0;
-		for (DWORD i = 0; i < min(bytesRead, 4); i++) {
-			result |= (static_cast<unsigned int>(buffer[i]) << (i * 8));
+		// Pack the bytes into uint64_t
+		uint64_t result = 0;
+		for (DWORD i = 0; i < bytesRead; i++) {
+			result |= (static_cast<uint64_t>(buffer[i]) << (i * 8));
 		}
-
-		std::string logMessage = "Returning button state: " + UIntToHexString(result);
 		//------------------------------ debug start ------------------------------
-		WriteToLog(logMessage.c_str());
+		// Log the full state
+		/*
+		ss.str("");
+		ss << "Button states (64-bit): 0x" << std::hex << std::setfill('0')
+			<< std::setw(16) << result;
+		WriteToLog(ss.str().c_str());
+		*/
 		//------------------------------- debug end -------------------------------
 
 		return result;
 	}
-
 	//******************** CloseJoystick ********************
 	int CloseJoystick(void* handle) {
 		JoystickHandle* joystickHandle = static_cast<JoystickHandle*>(handle);
@@ -600,13 +636,13 @@ extern "C" {
 			CloseHandle(joystickHandle->deviceHandle);
 			delete joystickHandle;
 			//------------------------------ debug start ------------------------------
-			CloseLog();
+			//CloseLog();
 			//------------------------------- debug end -------------------------------
 			return 0;
 		}
 		//------------------------------ debug start ------------------------------
-		WriteToLog("Attempted to close an invalid or already closed handle.");
-		CloseLog();
+		//WriteToLog("Attempted to close an invalid or already closed handle.");
+		//CloseLog();
 		//------------------------------- debug end -------------------------------
 		return -1;  // No device was open
 	}

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <windows.h>
 #include <iomanip>
+#include <stdint.h>
 #include "ButtonController.h"
 #include <nlohmann/json.hpp>
 
@@ -9,14 +10,14 @@ using json = nlohmann::json;
 
 #pragma comment(lib, "ButtonController.lib")
 
-void printButtonStates(unsigned int buttonStates) {
+void printButtonStates(uint64_t buttonStates) {
 	std::cout << "Binary: ";
-	for (int i = 31; i >= 0; i--) {
-		std::cout << ((buttonStates & (1 << i)) ? "1" : "0");
+	for (int i = 63; i >= 0; i--) {  // Changed from 31 to 63 for 64 bits
+		std::cout << ((buttonStates & (1ULL << i)) ? "1" : "0");  // Note the ULL
 		if (i % 8 == 0) std::cout << " ";
 	}
 	std::cout << "\n";
-	//std::cout << "\nHex: 0x" << std::hex << std::setw(8) << std::setfill('0') << buttonStates << std::dec << std::endl;
+	//std::cout << "Hex: 0x" << std::hex << std::setw(16) << std::setfill('0') << buttonStates << std::dec << std::endl;
 }
 
 void printDeviceInfo(const json& device) {
@@ -101,8 +102,8 @@ int main() {
 	}
 
 	// Find joystick by product string
-	//const char* deviceName = "Three Button Controller";
-	const char* deviceName = "USB FS IO";
+	const char* deviceName = "Three Button Controller";
+	//const char* deviceName = "USB FS IO";
 	//const char* deviceName = "Kinesis JoyStick Controller";
 	int joystickId = FindJoystickByProductString(deviceName);
 
@@ -114,12 +115,12 @@ int main() {
 	}
 
 	// Find joystick by vendor and product ID
-	//unsigned short vendorID = 0x04d8;  // Three Button Controller
-	//unsigned short productID = 0x005e; // Three Button Controller
+	unsigned short vendorID = 0x04d8;  // Three Button Controller
+	unsigned short productID = 0x005e; // Three Button Controller
 	//unsigned short vendorID = 0x0FC5;  // Pedals
 	//unsigned short productID = 0xB030; // Pedals
-	unsigned short vendorID = 0x0FC5;  // USB FS IO
-	unsigned short productID = 0xB080; // USB FS IO
+	//unsigned short vendorID = 0x0FC5;  // USB FS IO
+	//unsigned short productID = 0xB080; // USB FS IO
 
 	joystickId = FindJoystickByVendorAndProductID(vendorID, productID);
 
@@ -135,18 +136,20 @@ int main() {
 	if (joystickHandle) {
 		std::cout << "Successfully opened joystick." << std::endl;
 
-		for (int i = 0; i < 100; i++) {
-			unsigned int buttonStates = ReadButtons(joystickHandle);
-			if (buttonStates != static_cast<unsigned int>(-1) &&
-				buttonStates != static_cast<unsigned int>(-2) &&
-				buttonStates != static_cast<unsigned int>(-3)) {
+		for (int i = 0; i < 500; i++) {
+			uint64_t buttonStates = ReadButtons(joystickHandle);
+			if (buttonStates != BUTTONS_ERROR_INVALID_HANDLE &&
+				buttonStates != BUTTONS_ERROR_READ_FAILED &&
+				buttonStates != BUTTONS_ERROR_OVERSIZED_REPORT) {
 				std::cout << "Button states: ";
 				printButtonStates(buttonStates);
 			}
 			else {
-				std::cout << "Failed to read button states. Error code: " << buttonStates << std::endl;
+				std::cout << "Failed to read button states. Error code: 0x"
+					<< std::hex << std::setw(16) << std::setfill('0')
+					<< buttonStates << std::dec << std::endl;
 			}
-			Sleep(100);  // Small delay to avoid hammering the device
+			Sleep(10);
 		}
 
 		if (CloseJoystick(joystickHandle) == 0) {
@@ -174,91 +177,91 @@ using json = nlohmann::json;
 
 // Helper function to print string as hex bytes
 void printStringAsHex(const char* str) {
-    std::cout << "String as hex bytes: ";
-    while (*str) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') 
-                  << static_cast<int>(static_cast<unsigned char>(*str)) << " ";
-        str++;
-    }
-    std::cout << std::dec << std::endl;
+	std::cout << "String as hex bytes: ";
+	while (*str) {
+		std::cout << std::hex << std::setw(2) << std::setfill('0')
+				  << static_cast<int>(static_cast<unsigned char>(*str)) << " ";
+		str++;
+	}
+	std::cout << std::dec << std::endl;
 }
 
 // Helper function to print wstring as hex bytes
 void printWStringAsHex(const wchar_t* wstr) {
-    std::cout << "WString as hex bytes: ";
-    while (*wstr) {
-        std::cout << std::hex << std::setw(4) << std::setfill('0') 
-                  << static_cast<int>(*wstr) << " ";
-        wstr++;
-    }
-    std::cout << std::dec << std::endl;
+	std::cout << "WString as hex bytes: ";
+	while (*wstr) {
+		std::cout << std::hex << std::setw(4) << std::setfill('0')
+				  << static_cast<int>(*wstr) << " ";
+		wstr++;
+	}
+	std::cout << std::dec << std::endl;
 }
 
 int main() {
-    std::cout << "Button Controller Test\n";
-    std::cout << "=====================\n\n";
+	std::cout << "Button Controller Test\n";
+	std::cout << "=====================\n\n";
 
-    // First, get the device list and find the exact product string
-    const int BUFFER_SIZE = 32768;
-    char buffer[BUFFER_SIZE] = { 0 };
-    
-    if (GetHIDDeviceList(buffer, BUFFER_SIZE) == 0) {
-        try {
-            json devices = json::parse(buffer);
-            std::cout << "Found " << devices.size() << " HID devices.\n";
-            
-            // Find and store the exact product string from the device list
-            std::string exactProductString;
-            for (const auto& device : devices) {
-                std::string product = device["product"].get<std::string>();
-                if (product.find("Kinesis") != std::string::npos) {
-                    std::cout << "\nFound Kinesis device in list:\n";
-                    std::cout << "Product string: \"" << product << "\"\n";
-                    printStringAsHex(product.c_str());
-                    exactProductString = product;
-                }
-            }
+	// First, get the device list and find the exact product string
+	const int BUFFER_SIZE = 32768;
+	char buffer[BUFFER_SIZE] = { 0 };
 
-            if (!exactProductString.empty()) {
-                std::cout << "\nTesting with exact product string from device list...\n";
-                int joystickId = FindJoystickByProductString(exactProductString.c_str());
-                std::cout << "Result: " << joystickId << std::endl;
+	if (GetHIDDeviceList(buffer, BUFFER_SIZE) == 0) {
+		try {
+			json devices = json::parse(buffer);
+			std::cout << "Found " << devices.size() << " HID devices.\n";
 
-                std::cout << "\nTesting with hardcoded string...\n";
-                const char* hardcodedName = "Kinesis JoyStick Controller";
-                std::cout << "Hardcoded string: \"" << hardcodedName << "\"\n";
-                printStringAsHex(hardcodedName);
-                joystickId = FindJoystickByProductString(hardcodedName);
-                std::cout << "Result: " << joystickId << std::endl;
+			// Find and store the exact product string from the device list
+			std::string exactProductString;
+			for (const auto& device : devices) {
+				std::string product = device["product"].get<std::string>();
+				if (product.find("Kinesis") != std::string::npos) {
+					std::cout << "\nFound Kinesis device in list:\n";
+					std::cout << "Product string: \"" << product << "\"\n";
+					printStringAsHex(product.c_str());
+					exactProductString = product;
+				}
+			}
 
-                // Try with vendor and product ID from the device list
-                for (const auto& device : devices) {
-                    if (device["product"].get<std::string>() == exactProductString) {
-                        std::string vendorIdStr = device["vendorID"].get<std::string>();
-                        std::string productIdStr = device["productID"].get<std::string>();
-                        
-                        // Convert hex strings to integers
-                        unsigned short vendorId = std::stoi(vendorIdStr.substr(2), nullptr, 16);
-                        unsigned short productId = std::stoi(productIdStr.substr(2), nullptr, 16);
+			if (!exactProductString.empty()) {
+				std::cout << "\nTesting with exact product string from device list...\n";
+				int joystickId = FindJoystickByProductString(exactProductString.c_str());
+				std::cout << "Result: " << joystickId << std::endl;
 
-                        std::cout << "\nTrying with Vendor ID: 0x" << std::hex << vendorId 
-                                  << " Product ID: 0x" << productId << std::dec << "\n";
-                        joystickId = FindJoystickByVendorAndProductID(vendorId, productId);
-                        std::cout << "Result: " << joystickId << std::endl;
-                    }
-                }
-            }
-        }
-        catch (const json::parse_error& e) {
-            std::cout << "Failed to parse device list: " << e.what() << std::endl;
-            return 1;
-        }
-    }
-    else {
-        std::cout << "Failed to get HID device list" << std::endl;
-        return 1;
-    }
+				std::cout << "\nTesting with hardcoded string...\n";
+				const char* hardcodedName = "Kinesis JoyStick Controller";
+				std::cout << "Hardcoded string: \"" << hardcodedName << "\"\n";
+				printStringAsHex(hardcodedName);
+				joystickId = FindJoystickByProductString(hardcodedName);
+				std::cout << "Result: " << joystickId << std::endl;
 
-    return 0;
+				// Try with vendor and product ID from the device list
+				for (const auto& device : devices) {
+					if (device["product"].get<std::string>() == exactProductString) {
+						std::string vendorIdStr = device["vendorID"].get<std::string>();
+						std::string productIdStr = device["productID"].get<std::string>();
+
+						// Convert hex strings to integers
+						unsigned short vendorId = std::stoi(vendorIdStr.substr(2), nullptr, 16);
+						unsigned short productId = std::stoi(productIdStr.substr(2), nullptr, 16);
+
+						std::cout << "\nTrying with Vendor ID: 0x" << std::hex << vendorId
+								  << " Product ID: 0x" << productId << std::dec << "\n";
+						joystickId = FindJoystickByVendorAndProductID(vendorId, productId);
+						std::cout << "Result: " << joystickId << std::endl;
+					}
+				}
+			}
+		}
+		catch (const json::parse_error& e) {
+			std::cout << "Failed to parse device list: " << e.what() << std::endl;
+			return 1;
+		}
+	}
+	else {
+		std::cout << "Failed to get HID device list" << std::endl;
+		return 1;
+	}
+
+	return 0;
 }
 */
