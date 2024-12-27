@@ -60,36 +60,44 @@ void CloseLog() {
 	}
 }
 
-void WriteToLog(const char* message) {
-	if (logFile.is_open()) {
-		auto now = std::chrono::system_clock::now();
-		auto in_time_t = std::chrono::system_clock::to_time_t(now);
-		std::tm bt;
-		localtime_s(&bt, &in_time_t);
-		logFile << std::put_time(&bt, "%Y-%m-%d %X") << ": " << message << std::endl;
-	}
+// C++ implementation
+void WriteToLogCpp(const std::string& message) {
+    if (logFile.is_open()) {
+        auto now = std::chrono::system_clock::now();
+        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+        std::tm bt;
+        localtime_s(&bt, &in_time_t);
+        logFile << std::put_time(&bt, "%Y-%m-%d %X") << ": " << message << std::endl;
+    }
+}
+
+// C interface implementation
+extern "C" void WriteToLog(const char* message) {
+    if (message) {
+        WriteToLogCpp(std::string(message));
+    }
 }
 
 void LogDeviceCapabilities(HANDLE deviceHandle) {
-    PHIDP_PREPARSED_DATA preparsedData = NULL;
-    if (!HidD_GetPreparsedData(deviceHandle, &preparsedData)) {
-        WriteToLog("Failed to get preparsed data");
-        return;
-    }
+	PHIDP_PREPARSED_DATA preparsedData = NULL;
+	if (!HidD_GetPreparsedData(deviceHandle, &preparsedData)) {
+		WriteToLog("Failed to get preparsed data");
+		return;
+	}
 
-    HIDP_CAPS caps;
-    if (HidP_GetCaps(preparsedData, &caps) == HIDP_STATUS_SUCCESS) {
-        std::stringstream ss;
-        ss << "Device Capabilities:" << std::endl
-           << "Input Report Length: " << caps.InputReportByteLength << std::endl
-           << "Output Report Length: " << caps.OutputReportByteLength << std::endl
-           << "Feature Report Length: " << caps.FeatureReportByteLength << std::endl
-           << "Number of Input Button Caps: " << caps.NumberInputButtonCaps << std::endl
-           << "Number of Input Value Caps: " << caps.NumberInputValueCaps;
-        WriteToLog(ss.str().c_str());
-    }
+	HIDP_CAPS caps;
+	if (HidP_GetCaps(preparsedData, &caps) == HIDP_STATUS_SUCCESS) {
+		std::stringstream ss;
+		ss << "Device Capabilities:" << std::endl
+			<< "Input Report Length: " << caps.InputReportByteLength << std::endl
+			<< "Output Report Length: " << caps.OutputReportByteLength << std::endl
+			<< "Feature Report Length: " << caps.FeatureReportByteLength << std::endl
+			<< "Number of Input Button Caps: " << caps.NumberInputButtonCaps << std::endl
+			<< "Number of Input Value Caps: " << caps.NumberInputValueCaps;
+		WriteToLog(ss.str().c_str());
+	}
 
-    HidD_FreePreparsedData(preparsedData);
+	HidD_FreePreparsedData(preparsedData);
 }
 
 // Helper function to convert unsigned int to hex string
@@ -432,7 +440,7 @@ extern "C" {
 			FILE_SHARE_READ | FILE_SHARE_WRITE,
 			NULL,
 			OPEN_EXISTING,
-			FILE_FLAG_OVERLAPPED, 
+			FILE_FLAG_OVERLAPPED,
 			NULL
 		);
 
@@ -478,71 +486,108 @@ extern "C" {
 			return static_cast<unsigned int>(-1);
 		}
 
-		BYTE buffer[65];  // Adjust size based on your device's report size (64 bytes + 1 for report ID)
-		DWORD bytesRead;
-		OVERLAPPED ol = { 0 };
-		ol.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-
-		if (ol.hEvent == NULL) {
+		// Get the capabilities first to determine the correct input report length
+		PHIDP_PREPARSED_DATA preparsedData = NULL;
+		if (!HidD_GetPreparsedData(joystickHandle->deviceHandle, &preparsedData)) {
 			//------------------------------ debug start ------------------------------
-			WriteToLog("Failed to create event for overlapped I/O");
+			WriteToLog("Failed to get preparsed data");
 			//------------------------------- debug end -------------------------------
 			return static_cast<unsigned int>(-2);
 		}
 
-		buffer[0] = 0;  // Report ID, usually 0 for the first report
+		HIDP_CAPS caps;
+		if (HidP_GetCaps(preparsedData, &caps) != HIDP_STATUS_SUCCESS) {
+			HidD_FreePreparsedData(preparsedData);
+			//------------------------------ debug start ------------------------------
+			WriteToLog("Failed to get capabilities");
+			//------------------------------- debug end -------------------------------
+			return static_cast<unsigned int>(-3);
+		}
 
+		// Use the actual input report length from the device
+		DWORD bufferSize = caps.InputReportByteLength;
+		std::vector<BYTE> buffer(bufferSize);
+
+		//------------------------------ debug start ------------------------------
+		WriteToLog(("Buffer size: " + std::to_string(bufferSize)).c_str());
+		//------------------------------- debug end -------------------------------
+
+		OVERLAPPED ol = { 0 };
+		ol.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+		if (ol.hEvent == NULL) {
+			HidD_FreePreparsedData(preparsedData);
+			//------------------------------ debug start ------------------------------
+			WriteToLog("Failed to create event for overlapped I/O");
+			//------------------------------- debug end -------------------------------
+			return static_cast<unsigned int>(-4);
+		}
+
+		DWORD bytesRead = 0;
 		//------------------------------ debug start ------------------------------
 		WriteToLog("Attempting to read from device...");
 		//------------------------------- debug end -------------------------------
 
-		if (ReadFile(joystickHandle->deviceHandle, buffer, sizeof(buffer), &bytesRead, &ol) ||
-			GetLastError() == ERROR_IO_PENDING) {
-			if (WaitForSingleObject(ol.hEvent, 1000) == WAIT_OBJECT_0) {
-				GetOverlappedResult(joystickHandle->deviceHandle, &ol, &bytesRead, FALSE);
-
+		if (!ReadFile(joystickHandle->deviceHandle, buffer.data(), bufferSize, &bytesRead, &ol)) {
+			DWORD error = GetLastError();
+			if (error != ERROR_IO_PENDING) {
 				CloseHandle(ol.hEvent);
-
+				HidD_FreePreparsedData(preparsedData);
 				//------------------------------ debug start ------------------------------
-				//Log raw data
-				std::stringstream ss;
-				ss << "Raw data: ";
-				for (DWORD i = 0; i < bytesRead; i++) {
-					ss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(buffer[i]) << " ";
-				}
-				WriteToLog(ss.str().c_str());
+				WriteToLog(("ReadFile failed immediately with error: " + std::to_string(error)).c_str());
 				//------------------------------- debug end -------------------------------
-
-				// Assuming buttons are in the first 4 bytes of the report
-				unsigned int result = 0;
-				for (DWORD i = 0; i < min(bytesRead, 4); i++) {  // Up to 4 bytes (32 bits)
-					result |= (static_cast<unsigned int>(buffer[i]) << (i * 8));
-				}
-
-				//------------------------------ debug start ------------------------------
-				std::string logMessage = "Returning button state: " + UIntToHexString(result);
-				WriteToLog(logMessage.c_str());
-				//------------------------------- debug end -------------------------------
-
-				return result;
-			}
-			else {
-				//------------------------------ debug start ------------------------------
-				WriteToLog("WaitForSingleObject failed or timed out");
-				//------------------------------- debug end -------------------------------
+				return static_cast<unsigned int>(-5);
 			}
 		}
-		else {
+
+		// Wait for the read operation to complete
+		DWORD waitResult = WaitForSingleObject(ol.hEvent, 1000); // 1 second timeout
+		if (waitResult != WAIT_OBJECT_0) {
+			CloseHandle(ol.hEvent);
+			HidD_FreePreparsedData(preparsedData);
 			//------------------------------ debug start ------------------------------
-			DWORD error = GetLastError();
-			std::stringstream ss;
-			ss << "Failed to read from device, error code: " << error;
-			WriteToLog(ss.str().c_str());
+			WriteToLog(("Wait failed or timed out. WaitResult: " + std::to_string(waitResult)).c_str());
 			//------------------------------- debug end -------------------------------
+			CancelIo(joystickHandle->deviceHandle);
+			return static_cast<unsigned int>(-6);
+		}
+
+		if (!GetOverlappedResult(joystickHandle->deviceHandle, &ol, &bytesRead, FALSE)) {
+			DWORD error = GetLastError();
+			CloseHandle(ol.hEvent);
+			HidD_FreePreparsedData(preparsedData);
+			//------------------------------ debug start ------------------------------
+			WriteToLog(("GetOverlappedResult failed with error: " + std::to_string(error)).c_str());
+			//------------------------------- debug end -------------------------------
+			return static_cast<unsigned int>(-7);
 		}
 
 		CloseHandle(ol.hEvent);
-		return static_cast<unsigned int>(-3);  // Error: Couldn't read from device
+		HidD_FreePreparsedData(preparsedData);
+
+		//------------------------------ debug start ------------------------------
+		// Log raw data
+		std::stringstream ss;
+		ss << "Raw data: ";
+		for (DWORD i = 0; i < bytesRead; i++) {
+			ss << std::hex << std::setfill('0') << std::setw(2)
+				<< static_cast<int>(buffer[i]) << " ";
+		}
+		WriteToLog(ss.str().c_str());
+		//------------------------------- debug end -------------------------------
+
+		// Process the data
+		unsigned int result = 0;
+		for (DWORD i = 0; i < min(bytesRead, 4); i++) {
+			result |= (static_cast<unsigned int>(buffer[i]) << (i * 8));
+		}
+
+		std::string logMessage = "Returning button state: " + UIntToHexString(result);
+		//------------------------------ debug start ------------------------------
+		WriteToLog(logMessage.c_str());
+		//------------------------------- debug end -------------------------------
+
+		return result;
 	}
 
 	//******************** CloseJoystick ********************

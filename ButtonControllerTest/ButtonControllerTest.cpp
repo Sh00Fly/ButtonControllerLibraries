@@ -15,7 +15,8 @@ void printButtonStates(unsigned int buttonStates) {
 		std::cout << ((buttonStates & (1 << i)) ? "1" : "0");
 		if (i % 8 == 0) std::cout << " ";
 	}
-	std::cout << "\nHex: 0x" << std::hex << std::setw(8) << std::setfill('0') << buttonStates << std::dec << std::endl;
+	std::cout << "\n";
+	//std::cout << "\nHex: 0x" << std::hex << std::setw(8) << std::setfill('0') << buttonStates << std::dec << std::endl;
 }
 
 void printDeviceInfo(const json& device) {
@@ -113,12 +114,12 @@ int main() {
 	}
 
 	// Find joystick by vendor and product ID
-	//unsigned short vendorID = 0x04d8;  // Replace with your joystick's VendorID
-	//unsigned short productID = 0x005e; // Replace with your joystick's ProductID
-	//unsigned short vendorID = 0x0FC5;  // Replace with your joystick's VendorID
-	//unsigned short productID = 0xB030; // Replace with your joystick's ProductID
-	unsigned short vendorID = 0x0FC5;  // Replace with your joystick's VendorID
-	unsigned short productID = 0xB080; // Replace with your joystick's ProductID
+	//unsigned short vendorID = 0x04d8;  // Three Button Controller
+	//unsigned short productID = 0x005e; // Three Button Controller
+	//unsigned short vendorID = 0x0FC5;  // Pedals
+	//unsigned short productID = 0xB030; // Pedals
+	unsigned short vendorID = 0x0FC5;  // USB FS IO
+	unsigned short productID = 0xB080; // USB FS IO
 
 	joystickId = FindJoystickByVendorAndProductID(vendorID, productID);
 
