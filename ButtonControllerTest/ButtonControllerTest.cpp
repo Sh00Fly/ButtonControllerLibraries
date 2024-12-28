@@ -102,8 +102,8 @@ int main() {
 	}
 
 	// Find joystick by product string
-	const char* deviceName = "Three Button Controller";
-	//const char* deviceName = "USB FS IO";
+	//const char* deviceName = "Three Button Controller";
+	const char* deviceName = "USB FS IO";
 	//const char* deviceName = "Kinesis JoyStick Controller";
 	int joystickId = FindJoystickByProductString(deviceName);
 
@@ -115,12 +115,12 @@ int main() {
 	}
 
 	// Find joystick by vendor and product ID
-	unsigned short vendorID = 0x04d8;  // Three Button Controller
-	unsigned short productID = 0x005e; // Three Button Controller
+	//unsigned short vendorID = 0x04d8;  // Three Button Controller
+	//unsigned short productID = 0x005e; // Three Button Controller
 	//unsigned short vendorID = 0x0FC5;  // Pedals
 	//unsigned short productID = 0xB030; // Pedals
-	//unsigned short vendorID = 0x0FC5;  // USB FS IO
-	//unsigned short productID = 0xB080; // USB FS IO
+	unsigned short vendorID = 0x0FC5;  // USB FS IO
+	unsigned short productID = 0xB080; // USB FS IO
 
 	joystickId = FindJoystickByVendorAndProductID(vendorID, productID);
 

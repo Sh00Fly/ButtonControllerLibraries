@@ -303,6 +303,7 @@ extern "C" {
 		strncpy_s(buffer, bufferSize, result.c_str(), _TRUNCATE);
 		return 0;  // Success
 	}
+
 	//******************** FindJoystickByVendorAndProductID ********************
 	int FindJoystickByVendorAndProductID(unsigned short vendorID, unsigned short productID) {
 		GUID hidGuid;
@@ -402,6 +403,7 @@ extern "C" {
 		SetupDiDestroyDeviceInfoList(deviceInfoSet);
 		return -1;  // Device not found
 	}
+
 	//******************** OpenJoystick ********************
 	void* OpenJoystick(int joystickId) {
 		//------------------------------ debug start ------------------------------
@@ -506,9 +508,7 @@ extern "C" {
 	}
 
 	//******************** ReadButtons ********************
-
 	uint64_t ReadButtons(void* handle) {
-
 		JoystickHandle* joystickHandle = static_cast<JoystickHandle*>(handle);
 		if (!joystickHandle || joystickHandle->deviceHandle == INVALID_HANDLE_VALUE) {
 			//------------------------------ debug start ------------------------------
@@ -626,6 +626,7 @@ extern "C" {
 
 		return result;
 	}
+
 	//******************** CloseJoystick ********************
 	int CloseJoystick(void* handle) {
 		JoystickHandle* joystickHandle = static_cast<JoystickHandle*>(handle);
