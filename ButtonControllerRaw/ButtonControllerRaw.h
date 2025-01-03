@@ -7,17 +7,17 @@ extern "C" {
 #include <stdint.h>
 
 // Maximum report size this library can handle
-#define MAX_REPORT_SIZE 8
+#define BUTTONRAW_MAX_REPORT_SIZE 8
 
 // Error bit and special values
-#define BUTTON_ERROR_BIT              (1ULL << 63)  // Highest bit indicates error
-#define BUTTONS_ERROR_INVALID_HANDLE  (BUTTON_ERROR_BIT | 1ULL)
-#define BUTTONS_ERROR_READ_FAILED     (BUTTON_ERROR_BIT | 2ULL)
-#define BUTTONS_ERROR_OVERSIZED_REPORT (BUTTON_ERROR_BIT | 3ULL)
-#define BUTTONS_NO_NEW_DATA           0ULL  // All bits clear indicates no new data
+#define BUTTONRAW_ERROR_BIT              (1ULL << 63)  // Highest bit indicates error
+#define BUTTONRAW_ERROR_INVALID_HANDLE   (BUTTONRAW_ERROR_BIT | 1ULL)
+#define BUTTONRAW_ERROR_READ_FAILED      (BUTTONRAW_ERROR_BIT | 2ULL)
+#define BUTTONRAW_ERROR_OVERSIZED_REPORT (BUTTONRAW_ERROR_BIT | 3ULL)
+#define BUTTONRAW_NO_NEW_DATA           0ULL  // All bits clear indicates no new data
 
 // Helper macro to check for errors
-#define IS_BUTTON_ERROR(x) ((x) & BUTTON_ERROR_BIT)
+#define IS_BUTTONRAW_ERROR(x) ((x) & BUTTONRAW_ERROR_BIT)
 
 __declspec(dllexport) int FindJoystickByVendorAndProductID(unsigned short vendorID, unsigned short productID);
 __declspec(dllexport) int FindJoystickByProductString(const char* name);
