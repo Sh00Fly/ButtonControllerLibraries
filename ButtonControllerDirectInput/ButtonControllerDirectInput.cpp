@@ -13,9 +13,9 @@ using json = nlohmann::json;
 #pragma comment(lib, "dxguid.lib")
 
 struct JoystickHandle {
-    LPDIRECTINPUTDEVICE8 device;
-    DWORD capabilities;
-    DWORD deviceType;
+	LPDIRECTINPUTDEVICE8 device;
+	DWORD capabilities;
+	DWORD deviceType;
 };
 
 // Global DirectInput object
@@ -173,7 +173,7 @@ extern "C" {
 		return 0;  // Success
 	}
 
-	const char* FindJoystickByVendorAndProductIDAndUsage( unsigned short vendorID, unsigned short productID, unsigned short usagePage, unsigned short usage)
+	const char* FindJoystickByVendorAndProductIDAndUsage(unsigned short vendorID, unsigned short productID, unsigned short usagePage, unsigned short usage)
 	{
 		if (!g_pDI) {
 			HRESULT hr = DirectInput8Create(GetModuleHandle(NULL),
@@ -240,7 +240,7 @@ extern "C" {
 		return g_GUIDBuffer;
 	}
 
-	const char* FindJoystickByProductStringAndUsage( const char* name, unsigned short usagePage, unsigned short usage)
+	const char* FindJoystickByProductStringAndUsage(const char* name, unsigned short usagePage, unsigned short usage)
 	{
 		if (!g_pDI) {
 			HRESULT hr = DirectInput8Create(GetModuleHandle(NULL),
@@ -272,8 +272,16 @@ extern "C" {
 			FindContext* ctx = static_cast<FindContext*>(pvRef);
 
 			std::string productName = trim_nulls(wchar_to_string(lpddi->tszProductName));
+			//trim spaces
+			productName.erase(0, productName.find_first_not_of(" "));
+			productName.erase(productName.find_last_not_of(" ") + 1);
 
-			if (productName == ctx->name &&
+			// Get search name and trim it
+			std::string searchName = ctx->name;
+			searchName.erase(0, searchName.find_first_not_of(" "));
+			searchName.erase(searchName.find_last_not_of(" ") + 1);
+
+			if (productName == searchName &&
 				lpddi->wUsagePage == ctx->usagePage &&
 				lpddi->wUsage == ctx->usage)
 			{
@@ -302,117 +310,117 @@ extern "C" {
 		return g_GUIDBuffer;
 	}
 
- void* OpenJoystickByInstanceGUID(const char* instanceGUID) {
-    if (!instanceGUID) return nullptr;
+	void* OpenJoystickByInstanceGUID(const char* instanceGUID) {
+		if (!instanceGUID) return nullptr;
 
-    // Initialize DirectInput if not already done
-    if (!g_pDI) {
-        HRESULT hr = DirectInput8Create(GetModuleHandle(NULL),
-            DIRECTINPUT_VERSION,
-            IID_IDirectInput8,
-            (void**)&g_pDI,
-            NULL);
-        if (FAILED(hr)) return nullptr;
-    }
+		// Initialize DirectInput if not already done
+		if (!g_pDI) {
+			HRESULT hr = DirectInput8Create(GetModuleHandle(NULL),
+				DIRECTINPUT_VERSION,
+				IID_IDirectInput8,
+				(void**)&g_pDI,
+				NULL);
+			if (FAILED(hr)) return nullptr;
+		}
 
-    // Convert string GUID to GUID structure
-    GUID guid;
-    std::wstring wstr = string_to_wstring(instanceGUID);
-    if (FAILED(CLSIDFromString(wstr.c_str(), &guid))) {
-        return nullptr;
-    }
+		// Convert string GUID to GUID structure
+		GUID guid;
+		std::wstring wstr = string_to_wstring(instanceGUID);
+		if (FAILED(CLSIDFromString(wstr.c_str(), &guid))) {
+			return nullptr;
+		}
 
-    // Create device
-    LPDIRECTINPUTDEVICE8 device = nullptr;
-    HRESULT hr = g_pDI->CreateDevice(guid, &device, NULL);
-    if (FAILED(hr)) return nullptr;
+		// Create device
+		LPDIRECTINPUTDEVICE8 device = nullptr;
+		HRESULT hr = g_pDI->CreateDevice(guid, &device, NULL);
+		if (FAILED(hr)) return nullptr;
 
-    // Set data format (we'll use gamepad format as it's most suitable for button controllers)
-    hr = device->SetDataFormat(&c_dfDIJoystick2);
-    if (FAILED(hr)) {
-        device->Release();
-        return nullptr;
-    }
+		// Set data format (we'll use gamepad format as it's most suitable for button controllers)
+		hr = device->SetDataFormat(&c_dfDIJoystick2);
+		if (FAILED(hr)) {
+			device->Release();
+			return nullptr;
+		}
 
-    // Set cooperative level
-    HWND hwnd = GetForegroundWindow();
-    hr = device->SetCooperativeLevel(hwnd, DISCL_BACKGROUND | DISCL_NONEXCLUSIVE);
-    if (FAILED(hr)) {
-        device->Release();
-        return nullptr;
-    }
+		// Set cooperative level
+		HWND hwnd = GetForegroundWindow();
+		hr = device->SetCooperativeLevel(hwnd, DISCL_BACKGROUND | DISCL_NONEXCLUSIVE);
+		if (FAILED(hr)) {
+			device->Release();
+			return nullptr;
+		}
 
-    // Get device capabilities
-    DIDEVCAPS caps;
-    caps.dwSize = sizeof(DIDEVCAPS);
-    hr = device->GetCapabilities(&caps);
-    if (FAILED(hr)) {
-        device->Release();
-        return nullptr;
-    }
+		// Get device capabilities
+		DIDEVCAPS caps;
+		caps.dwSize = sizeof(DIDEVCAPS);
+		hr = device->GetCapabilities(&caps);
+		if (FAILED(hr)) {
+			device->Release();
+			return nullptr;
+		}
 
-    // Create and initialize our handle structure
-    JoystickHandle* handle = new JoystickHandle();
-    handle->device = device;
-    handle->capabilities = caps.dwFlags;
-    handle->deviceType = caps.dwDevType;
+		// Create and initialize our handle structure
+		JoystickHandle* handle = new JoystickHandle();
+		handle->device = device;
+		handle->capabilities = caps.dwFlags;
+		handle->deviceType = caps.dwDevType;
 
-    // Acquire the device
-    device->Acquire();
+		// Acquire the device
+		device->Acquire();
 
-    return handle;
-}
+		return handle;
+	}
 
-uint64_t ReadButtons(void* handle) {
-    JoystickHandle* joystickHandle = static_cast<JoystickHandle*>(handle);
-    if (!joystickHandle || !joystickHandle->device) {
-        return BUTTONDI_ERROR_INVALID_HANDLE;
-    }
+	uint64_t ReadButtons(void* handle) {
+		JoystickHandle* joystickHandle = static_cast<JoystickHandle*>(handle);
+		if (!joystickHandle || !joystickHandle->device) {
+			return BUTTONDI_ERROR_INVALID_HANDLE;
+		}
 
-    DIJOYSTATE2 js;
-    HRESULT hr = joystickHandle->device->Poll();
-    
-    if (FAILED(hr)) {
-        // Device might need to be reacquired
-        hr = joystickHandle->device->Acquire();
-        if (FAILED(hr)) {
-            return BUTTONDI_ERROR_READ_FAILED;
-        }
-        hr = joystickHandle->device->Poll();
-        if (FAILED(hr)) {
-            return BUTTONDI_ERROR_READ_FAILED;
-        }
-    }
+		DIJOYSTATE2 js;
+		HRESULT hr = joystickHandle->device->Poll();
 
-    hr = joystickHandle->device->GetDeviceState(sizeof(DIJOYSTATE2), &js);
-    if (FAILED(hr)) {
-        return BUTTONDI_ERROR_READ_FAILED;
-    }
+		if (FAILED(hr)) {
+			// Device might need to be reacquired
+			hr = joystickHandle->device->Acquire();
+			if (FAILED(hr)) {
+				return BUTTONDI_ERROR_READ_FAILED;
+			}
+			hr = joystickHandle->device->Poll();
+			if (FAILED(hr)) {
+				return BUTTONDI_ERROR_READ_FAILED;
+			}
+		}
 
-    // Pack the button states into uint64_t
-    uint64_t buttonStates = 0;
-    for (int i = 0; i < 32 && i < sizeof(js.rgbButtons); i++) {
-        if (js.rgbButtons[i] & 0x80) {
-            buttonStates |= (1ULL << i);
-        }
-    }
+		hr = joystickHandle->device->GetDeviceState(sizeof(DIJOYSTATE2), &js);
+		if (FAILED(hr)) {
+			return BUTTONDI_ERROR_READ_FAILED;
+		}
 
-    return buttonStates;
-}
+		// Pack the button states into uint64_t
+		uint64_t buttonStates = 0;
+		for (int i = 0; i < 32 && i < sizeof(js.rgbButtons); i++) {
+			if (js.rgbButtons[i] & 0x80) {
+				buttonStates |= (1ULL << i);
+			}
+		}
 
-int CloseJoystick(void* handle) {
-    JoystickHandle* joystickHandle = static_cast<JoystickHandle*>(handle);
-    if (!joystickHandle) {
-        return -1;
-    }
+		return buttonStates;
+	}
 
-    if (joystickHandle->device) {
-        joystickHandle->device->Unacquire();
-        joystickHandle->device->Release();
-    }
+	int CloseJoystick(void* handle) {
+		JoystickHandle* joystickHandle = static_cast<JoystickHandle*>(handle);
+		if (!joystickHandle) {
+			return -1;
+		}
 
-    delete joystickHandle;
-    return 0;
-}
+		if (joystickHandle->device) {
+			joystickHandle->device->Unacquire();
+			joystickHandle->device->Release();
+		}
+
+		delete joystickHandle;
+		return 0;
+	}
 
 }
