@@ -7,6 +7,13 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ButtonControllerRaw", "Butt
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ButtonControllerRawTest", "ButtonControllerRawTest\ButtonControllerRawTest.vcxproj", "{638650EB-9794-436A-84DE-072511A5F2D0}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ButtonControllerDirectInput", "ButtonControllerDirectInput\ButtonControllerDirectInput.vcxproj", "{389A2981-D79E-48D2-B3FE-26EC15968F77}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ButtonControllerDirectInputTest", "ButtonControllerDirectInputTest\ButtonControllerDirectInputTest.vcxproj", "{BE5876BC-6D0B-4818-9A10-8E43C484666A}"
+	ProjectSection(ProjectDependencies) = postProject
+		{389A2981-D79E-48D2-B3FE-26EC15968F77} = {389A2981-D79E-48D2-B3FE-26EC15968F77}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -31,6 +38,22 @@ Global
 		{638650EB-9794-436A-84DE-072511A5F2D0}.Release|x64.Build.0 = Release|x64
 		{638650EB-9794-436A-84DE-072511A5F2D0}.Release|x86.ActiveCfg = Release|Win32
 		{638650EB-9794-436A-84DE-072511A5F2D0}.Release|x86.Build.0 = Release|Win32
+		{389A2981-D79E-48D2-B3FE-26EC15968F77}.Debug|x64.ActiveCfg = Debug|x64
+		{389A2981-D79E-48D2-B3FE-26EC15968F77}.Debug|x64.Build.0 = Debug|x64
+		{389A2981-D79E-48D2-B3FE-26EC15968F77}.Debug|x86.ActiveCfg = Debug|Win32
+		{389A2981-D79E-48D2-B3FE-26EC15968F77}.Debug|x86.Build.0 = Debug|Win32
+		{389A2981-D79E-48D2-B3FE-26EC15968F77}.Release|x64.ActiveCfg = Release|x64
+		{389A2981-D79E-48D2-B3FE-26EC15968F77}.Release|x64.Build.0 = Release|x64
+		{389A2981-D79E-48D2-B3FE-26EC15968F77}.Release|x86.ActiveCfg = Release|Win32
+		{389A2981-D79E-48D2-B3FE-26EC15968F77}.Release|x86.Build.0 = Release|Win32
+		{BE5876BC-6D0B-4818-9A10-8E43C484666A}.Debug|x64.ActiveCfg = Debug|x64
+		{BE5876BC-6D0B-4818-9A10-8E43C484666A}.Debug|x64.Build.0 = Debug|x64
+		{BE5876BC-6D0B-4818-9A10-8E43C484666A}.Debug|x86.ActiveCfg = Debug|Win32
+		{BE5876BC-6D0B-4818-9A10-8E43C484666A}.Debug|x86.Build.0 = Debug|Win32
+		{BE5876BC-6D0B-4818-9A10-8E43C484666A}.Release|x64.ActiveCfg = Release|x64
+		{BE5876BC-6D0B-4818-9A10-8E43C484666A}.Release|x64.Build.0 = Release|x64
+		{BE5876BC-6D0B-4818-9A10-8E43C484666A}.Release|x86.ActiveCfg = Release|Win32
+		{BE5876BC-6D0B-4818-9A10-8E43C484666A}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
