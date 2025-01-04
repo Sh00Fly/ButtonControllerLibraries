@@ -1,6 +1,7 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by ButtonController.rc
+// Used by Version Info.rc
+//
 
 // Next default values for new objects
 // 

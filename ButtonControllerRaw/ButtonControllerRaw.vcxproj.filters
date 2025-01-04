@@ -24,9 +24,6 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="resource1.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ButtonControllerRaw.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -43,7 +40,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="ButtonControllerRaw.rc">
+    <ResourceCompile Include="Version Info.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
