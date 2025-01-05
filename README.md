@@ -96,6 +96,7 @@ Error codes:
 Maximum report size is 8 bytes
 Devices with larger reports will be truncated
 Some devices (like USB FS IO) only report button state changes
+Some devices (like USB FS IO) create multiple HID interfaces. In this case, to identify and select a specific interface, UsagePage and Usage fields from the device capabilities should be used (this functionality is not currently implemented).
 Report sizes and button mappings vary by device
 Default timeout value of 100ms used for event reading
 Uses overlapped I/O for non-blocking reads

@@ -7,7 +7,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-using json = nlohmann::json;
+using ordered_json = nlohmann::ordered_json;
 
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
@@ -101,12 +101,16 @@ static bool StringToGUID(const char* str, GUID& guid) {
 
 // Callback function for device enumeration
 static BOOL CALLBACK EnumDevicesCallback(LPCDIDEVICEINSTANCE lpddi, LPVOID pvRef) {
-	json* deviceList = static_cast<json*>(pvRef);
+	ordered_json* deviceList = static_cast<ordered_json*>(pvRef);
 
-	json device;
+	ordered_json device;
 	device["index"] = deviceList->size();
 	device["name"] = trim_nulls(wchar_to_string(lpddi->tszProductName));
 	device["instanceName"] = trim_nulls(wchar_to_string(lpddi->tszInstanceName));
+
+	// VID/PID
+	device["vendorID"] = to_hex_string((lpddi->guidProduct.Data1 >> 16) & 0xFFFF);
+	device["productID"] = to_hex_string(lpddi->guidProduct.Data1 & 0xFFFF);
 
 	// GUID information
 	OLECHAR guidString[40];
@@ -126,9 +130,6 @@ static BOOL CALLBACK EnumDevicesCallback(LPCDIDEVICEINSTANCE lpddi, LPVOID pvRef
 	device["usagePage"] = to_hex_string(lpddi->wUsagePage);
 	device["usage"] = to_hex_string(lpddi->wUsage);
 
-	// VID/PID
-	device["vendorID"] = to_hex_string((lpddi->guidProduct.Data1 >> 16) & 0xFFFF);
-	device["productID"] = to_hex_string(lpddi->guidProduct.Data1 & 0xFFFF);
 
 	deviceList->push_back(device);
 	return DIENUM_CONTINUE;
@@ -154,7 +155,7 @@ extern "C" {
 		}
 
 		// Create JSON array for device list
-		json deviceList = json::array();
+		ordered_json deviceList = ordered_json::array();
 
 		// Enumerate devices
 		//HRESULT hr = g_pDI->EnumDevices(DI8DEVCLASS_GAMECTRL, EnumDevicesCallback, &deviceList, DIEDFL_ATTACHEDONLY);
