@@ -1,4 +1,4 @@
-# HID Button Controller Librarys
+# HID Button Controller Libraries
 This repository contains two libraries for interfacing with button controller devices:
 - Raw Input Library (ButtonControllerRaw) - Uses Windows Raw Input API
 - DirectInput Library (ButtonControllerDirectInput) - Uses DirectInput API
