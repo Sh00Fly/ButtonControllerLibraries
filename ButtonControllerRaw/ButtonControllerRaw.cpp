@@ -468,7 +468,7 @@ extern "C" {
     //******************** OpenJoystick ********************
     void* OpenJoystick(int joystickId) {
         //------------------------------ debug start ------------------------------
-        // InitializeLog("c:\\nki\\buttons.log");
+        // InitializeLog("c:\\temp\\buttons.log");
         //------------------------------- debug end -------------------------------
         GUID hidGuid;
         HidD_GetHidGuid(&hidGuid);
